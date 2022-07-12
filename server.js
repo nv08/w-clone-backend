@@ -5,8 +5,7 @@ import { MongoClient } from "mongodb";
 import BodyParser from "body-parser";
 import { v4 as uuid } from "uuid";
 
-const MONGO_URL =
-  "mongodb+srv://nilay:root@test-cluster.ohsou.mongodb.net/?retryWrites=true&w=majority";
+const MONGO_URL = process.env.DB_URL;
 
 const app = express();
 app.use(BodyParser.json());
