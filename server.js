@@ -82,7 +82,7 @@ MongoClient.connect(MONGO_URL, (err, db) => {
     }
   });
 
-  http.listen(5000, () => {
+  http.listen(process.env.PORT || 80, () => {
     console.log("server started");
   });
 
