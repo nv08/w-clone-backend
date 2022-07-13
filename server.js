@@ -73,7 +73,7 @@ app.post("/login", async (req, res) => {
     if (user && user.userId) {
       res.send({ status: "success", data: user });
     } else {
-      res.send({
+      res.status(401).send({
         status: "failed",
         msg: "invalid credentials",
       });
