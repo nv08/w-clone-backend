@@ -2,7 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import BodyParser from "body-parser";
-import { v4 as uuid, validate } from "uuid";
+import { v4 as uuid } from "uuid";
 import { db } from "./connection.js";
 import { validateId } from "./middlewares/validateId.js";
 
