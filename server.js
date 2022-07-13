@@ -5,8 +5,10 @@ import BodyParser from "body-parser";
 import { v4 as uuid } from "uuid";
 import { db } from "./connection.js";
 import { validateId } from "./middlewares/validateId.js";
+import cors from "cors";
 
 const app = express();
+app.use(cors());
 app.use(BodyParser.json());
 var http = createServer(app);
 const io = new Server(http, {
@@ -81,18 +83,32 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.post("/sendMessage", validateId, async(req, res) => {
-  try{
-  const { senderId, receiverId, message } = req.body;
-    console.log('came after ');
-  //update sender messages data
-  const response = await db.db().collection('chat').updateOne({userId: senderId},{$push: {"conversation[receiverId]":{from: senderId,to: receiverId, message:message, time: Date.now(), status: 'SENT'}}})
-  console.log(response);
-
-  }
-  catch(err){
+app.post("/sendMessage", validateId, async (req, res) => {
+  try {
+    const { senderId, receiverId, message } = req.body;
+    console.log("came after ");
+    //update sender messages data
+    const response = await db
+      .db()
+      .collection("chat")
+      .updateOne(
+        { userId: senderId },
+        {
+          $push: {
+            "conversation[receiverId]": {
+              from: senderId,
+              to: receiverId,
+              message: message,
+              time: Date.now(),
+              status: "SENT",
+            },
+          },
+        }
+      );
+    console.log(response);
+  } catch (err) {
     console.log(err);
-    res.status(500).send({status: 'failed', msg: 'internal server error'})
+    res.status(500).send({ status: "failed", msg: "internal server error" });
   }
 });
 
