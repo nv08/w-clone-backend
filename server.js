@@ -29,8 +29,8 @@ app.get("/", function (req, res) {
 });
 
 app.post("/register", async (req, res) => {
-  const { username, phone } = req.body;
-  if (!username || !phone) {
+  const { username, phone, password } = req.body;
+  if (!username || !phone || !password) {
     res.status(400).send({ status: "failed", msg: "invalid fields" });
     return;
   }
@@ -47,32 +47,33 @@ app.post("/register", async (req, res) => {
     const response = await db
       .db()
       .collection("users")
-      .insertOne({ userId: uuid(), username, phone });
-    console.log(response);
+      .insertOne({ userId: uuid(), username, phone, password });
+
     if (response.acknowledged) {
       res.send({ status: "success", data: [] });
       return;
     }
   } catch (err) {
+    console.log(err);
     res.status(500).send({ status: "failed", msg: "server error" });
   }
 });
 
 app.post("/login", async (req, res) => {
-  const { phone } = req.body;
+  const { phone, password } = req.body;
   // add length of phone num for prod
-  if (!phone) {
-    res.status(400).send({ status: "failed", msg: "invalid phone number" });
+  if (!phone || !password) {
+    res.status(400).send({ status: "failed", msg: "invalid credentials" });
     return;
   }
   try {
-    const user = await db.db().collection("users").findOne({ phone });
+    const user = await db.db().collection("users").findOne({ phone, password });
     if (user && user.userId) {
       res.send({ status: "success", data: user });
     } else {
       res.send({
         status: "failed",
-        msg: "phone number not registered with us",
+        msg: "invalid credentials",
       });
     }
   } catch (err) {
