@@ -1,5 +1,5 @@
 import { MongoClient } from "mongodb";
-import { config } from "dotenv";
+// import { config } from "dotenv";
 
 // config({ path: ".env" });
 
