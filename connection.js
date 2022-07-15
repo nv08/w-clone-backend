@@ -1,7 +1,9 @@
 import { MongoClient } from "mongodb";
-// import { config } from "dotenv";
+import { config } from "dotenv";
 
-// config({ path: ".env" });
+if (process.env.NODE_ENV !== "prod") {
+  config({ path: ".env" });
+}
 
 const MONGO_URL = process.env.DB_URL;
 

@@ -33,6 +33,7 @@ app.get("/", function (req, res) {
 
 app.post("/test-plugin",(req,res)=>{
   console.log(req.body, 'this is the body');
+  res.send(req.body);
 })
 
 app.post("/register", async (req, res) => {
