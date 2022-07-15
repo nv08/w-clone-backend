@@ -10,6 +10,7 @@ import cors from "cors";
 const app = express();
 app.use(cors());
 app.use(BodyParser.json());
+app.use(BodyParser.urlencoded({ extended: false }));
 var http = createServer(app);
 const io = new Server(http, {
   cors: {
@@ -29,6 +30,10 @@ io.use((socket, next) => {
 app.get("/", function (req, res) {
   res.send("hi");
 });
+
+app.post("/test-plugin",(req,res)=>{
+  console.log(req.body, 'this is the body');
+})
 
 app.post("/register", async (req, res) => {
   const { username, phone, password } = req.body;
