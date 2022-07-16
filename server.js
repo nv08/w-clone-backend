@@ -143,18 +143,22 @@ app.post("/getLastConversations", async (req, res) => {
       senderId: { $first: "$senderId" },
       receiverId: { $first: "$receiverId" },
       msgId: { $first: "$msgId" },
+      userDetails: { $first: "$userDetails" },
     },
     lookup: {
       from: "users",
-      localField: "senderId",
-      // localField: {
-      //   $cond: {
-      //     if: { $eq: ["$receiverId", userId] },
-      //     then: "receiverId",
-      //     else: "senderId",
-      //   },
-      // },
-      foreignField: "userId",
+      let: {
+        localField: {
+            $cond: {
+              if: { $eq: ["senderId", userId] },
+              then: "receiverId",
+              else: "senderId",
+            }
+        }
+    },
+    pipeline: [
+        { $match: { $expr: { $eq: ["$_id", "$$localField"] } } }
+    ],
       as: "userDetails",
     },
     project: {
@@ -165,21 +169,22 @@ app.post("/getLastConversations", async (req, res) => {
       message: 1,
       createdAt: 1,
       status: 1,
+      userDetails: 1,
     },
   };
-  const response = await db
+  await db
     .db()
     .collection("chat")
     .aggregate([
       { $match: q.match },
       { $sort: q.sort },
       { $lookup: q.lookup },
-      // { $group: q.group },
-
+      { $group: q.group },
       { $project: q.project },
     ])
-    .toArray((err, res) => {
-      console.log(res);
+    .toArray((err, result) => {
+      console.log(result, err);
+      res.send(result);
     });
 });
 
