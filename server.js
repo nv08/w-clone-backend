@@ -31,12 +31,6 @@ app.get("/", function (req, res) {
   res.send("hi");
 });
 
-app.post("/test-plugin",(req,res)=>{
-  console.log(req.body, 'this is the body');
-  console.log(typeof req.body)
-  res.send(req.body);
-})
-
 app.post("/register", async (req, res) => {
   const { username, phone, password } = req.body;
   if (!username || !phone || !password) {
@@ -76,7 +70,10 @@ app.post("/login", async (req, res) => {
     return;
   }
   try {
-    const user = await db.db().collection("users").findOne({ phone, password });
+    const user = await db
+      .db()
+      .collection("users")
+      .findOne({ phone, password }, { projection: { password: 0, _id: 0 } });
     if (user && user.userId) {
       res.send({ status: "success", data: user });
     } else {
@@ -92,31 +89,98 @@ app.post("/login", async (req, res) => {
 
 app.post("/sendMessage", validateId, async (req, res) => {
   try {
-    const { senderId, receiverId, message } = req.body;
-    console.log("came after ");
-    //update sender messages data
-    const response = await db
-      .db()
-      .collection("chat")
-      .updateOne(
-        { userId: senderId },
-        {
-          $push: {
-            "conversation[receiverId]": {
-              from: senderId,
-              to: receiverId,
-              message: message,
-              time: Date.now(),
-              status: "SENT",
-            },
-          },
-        }
-      );
-    console.log(response);
+    const { senderId, receiverId, message, msgId } = req.body;
+    const createdAt = Date.now();
+    let status = "sent";
+    // send to socket if ack within 1sec save status as "delievered" then store else store "sent"
+    const msgObj = { senderId, receiverId, msgId, message, status, createdAt };
+    const response = await db.db().collection("chat").insertOne(msgObj);
+
+    if (response.acknowledged) {
+      res.send(msgObj);
+    } else {
+      res.status(422).send({ status: "failed", msg: "Entry not processed" });
+    }
   } catch (err) {
     console.log(err);
     res.status(500).send({ status: "failed", msg: "internal server error" });
   }
+});
+
+app.post("/searchUser", async (req, res) => {
+  try {
+    const { phone } = req.body;
+    const response = await db
+      .db()
+      .collection("users")
+      .findOne({ phone }, { projection: { _id: 0, password: 0 } });
+
+    if (response) {
+      res.send({ status: "success", data: response });
+      return;
+    }
+    res.status(404).send({ status: "failed", msg: "phone not registered" });
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ status: "failed", msg: "internal server error" });
+  }
+});
+
+app.post("/getLastConversations", async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+    res.status(400).send({ status: "failed", msg: "missing fields" });
+    return;
+  }
+  const q = {
+    match: { $or: [{ receiverId: userId }, { senderId: userId }] },
+    sort: { createdAt: -1 },
+    group: {
+      _id: "$senderId",
+      message: { $first: "$message" },
+      createdAt: { $first: "$createdAt" },
+      status: { $first: "$status" },
+      senderId: { $first: "$senderId" },
+      receiverId: { $first: "$receiverId" },
+      msgId: { $first: "$msgId" },
+    },
+    lookup: {
+      from: "users",
+      localField: "senderId",
+      // localField: {
+      //   $cond: {
+      //     if: { $eq: ["$receiverId", userId] },
+      //     then: "receiverId",
+      //     else: "senderId",
+      //   },
+      // },
+      foreignField: "userId",
+      as: "userDetails",
+    },
+    project: {
+      _id: 0,
+      msgId: 1,
+      senderId: 1,
+      receiverId: 1,
+      message: 1,
+      createdAt: 1,
+      status: 1,
+    },
+  };
+  const response = await db
+    .db()
+    .collection("chat")
+    .aggregate([
+      { $match: q.match },
+      { $sort: q.sort },
+      { $lookup: q.lookup },
+      // { $group: q.group },
+
+      { $project: q.project },
+    ])
+    .toArray((err, res) => {
+      console.log(res);
+    });
 });
 
 http.listen(process.env.PORT || 80, () => {
