@@ -2,8 +2,8 @@ import { db } from "../connection.js";
 
 const validateId = async (req, res, next) => {
   try {
-    const { senderId, receiverId, msgId } = req.body;
-    if (!senderId || !receiverId || !msgId) {
+    const { senderId, receiverId } = req.body;
+    if (!senderId || !receiverId) {
       res.status(400).send({ status: "failed", msg: "missing ids" });
       return;
     }
@@ -16,6 +16,7 @@ const validateId = async (req, res, next) => {
 
     // if (validIDs !== 2) {
     //   res.status(403).send({ status: "failed", msg: "invalid users" });
+    //   return;
     // } else {
     //   next();
     // }
