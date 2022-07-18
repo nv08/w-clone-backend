@@ -15,8 +15,8 @@ import {
 const app = express();
 
 app.use(cors());
-//app.use(BodyParser.json());
-//app.use(BodyParser.urlencoded({ extended: false }));
+app.use(BodyParser.json());
+app.use(BodyParser.urlencoded({ extended: false }));
 var http = createServer(app);
 const io = new Server(http, {
   cors: {
@@ -36,13 +36,6 @@ const io = new Server(http, {
 app.get("/", function (req, res) {
   res.send("hi");
 });
-
-app.post("/test-plugin",(req,res)=>{
-  console.log(req.body, 'this is the body');
-  const x = JSON.parse(req.body)
-  console.log(JSON.parse(req.body), 'this is the parsed body');
-  res.send(x);
-})
 
 app.post("/register", async (req, res) => {
   const { username, phone, password } = req.body;
@@ -193,13 +186,7 @@ app.post("/getLastConversations", async (req, res) => {
         receiverId: 1,
         message: 1,
         createdAt: 1,
-        status: {
-          $cond: {
-            if: { $eq: ["$receiverId", userId] },
-            then: "$$REMOVE",
-            else: "$status",
-          },
-        },
+        status: 1,
         userDetails: 1,
       },
     };
