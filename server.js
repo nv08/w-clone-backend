@@ -15,7 +15,7 @@ import {
 const app = express();
 
 app.use(cors());
-app.use(BodyParser.json());
+//app.use(BodyParser.json());
 app.use(BodyParser.urlencoded({ extended: false }));
 var http = createServer(app);
 const io = new Server(http, {
