@@ -37,6 +37,13 @@ app.get("/", function (req, res) {
   res.send("hi");
 });
 
+app.post("/test-plugin",(req,res)=>{
+  console.log(req.body, 'this is the body');
+  const x = JSON.parse(req.body)
+  console.log(JSON.parse(req.body), 'this is the parsed body');
+  res.send(x);
+})
+
 app.post("/register", async (req, res) => {
   const { username, phone, password } = req.body;
   if (!username || !phone || !password) {
@@ -102,7 +109,7 @@ app.post("/sendMessage", validateId, async (req, res) => {
     const socket = getSocketId(receiverId);
 
     socket &&
-        socket.emit("msg-receive", msgObj, (confirmation) => {
+      socket.emit("msg-receive", msgObj, (confirmation) => {
         console.log(confirmation, "confirm");
         if (confirmation.status) {
           status = confirmation.status;
@@ -188,7 +195,7 @@ app.post("/getLastConversations", async (req, res) => {
         createdAt: 1,
         status: {
           $cond: {
-            if: { $eq: ["$senderId", userId] },
+            if: { $eq: ["$receiverId", userId] },
             then: "$$REMOVE",
             else: "$status",
           },
@@ -228,27 +235,40 @@ app.post("/getLastConversations", async (req, res) => {
 app.post("/getRoomById", validateId, async (req, res) => {
   try {
     const { senderId, receiverId } = req.body;
-    if (!senderId || !receiverId) {
-      res.status(400).send({ status: "failed", msg: "missing fields" });
-      return;
-    }
 
-    await db
+    // update all the fields to "read" status when certain room is opened
+    const updateFields = await db
       .db()
       .collection("chat")
-      .find({
-        $or: [
-          { $and: [{ senderId: senderId }, { receiverId: receiverId }] },
-          { $and: [{ senderId: receiverId }, { receiverId: senderId }] },
-        ],
-      })
-      .sort({ createdAt: -1 })
-      .toArray((err, result) => {
-        if (!err) {
-          res.send({ status: "success", data: result });
-          return;
-        }
-      });
+      .updateMany(
+        { senderId: receiverId, receiverId: senderId },
+        { $set: { status: "read" } },
+        { multi: true }
+      );
+
+    if (updateFields.acknowledged) {
+      await db
+        .db()
+        .collection("chat")
+        .find({
+          $or: [
+            { $and: [{ senderId: senderId }, { receiverId: receiverId }] },
+            { $and: [{ senderId: receiverId }, { receiverId: senderId }] },
+          ],
+        })
+        .sort({ createdAt: -1 })
+        .toArray((err, result) => {
+          if (!err) {
+            res.send({ status: "success", data: result });
+            return;
+          }
+        });
+      // send read event to receiver
+      const socket = getSocketId(receiverId);
+      socket && socket.emit("update-room-status", { senderId, status: "read" });
+    } else {
+      res.status(422).send({ status: "failed", msg: "some error occured" });
+    }
   } catch (err) {
     console.log(err);
     res.status(500).send({ status: "failed", msg: "internal server error" });
@@ -284,69 +304,35 @@ http.listen(process.env.PORT || 80, () => {
   console.log("server started");
 });
 
-io.on("connection", (socket) => {
-  upsertUserToSocketMap(socket.handshake.auth.userId, socket);
-  // socket.emit("msg-receive", "x", function (cnf) {
-  //   console.log(cnf);
-  // });
-  // socket.onAny((event, ...args) => {
-  //   console.log(event, args);
-  // });
-  // const userId = socket.handshake.auth.userId;
-  // upsertUserToSocketMap(userId);
+io.on("connection", async (socket) => {
+  const connectedUserId = socket.handshake.auth.userId;
+  upsertUserToSocketMap(connectedUserId, socket);
+  const response = await db
+    .db()
+    .collection("chat")
+    .updateMany(
+      { receiverId: connectedUserId },
+      {
+        $set: {
+          status: {
+            $cond: {
+              if: { $eq: ["$status", "sent"] },
+              then: "delivered",
+              else: "$status",
+            },
+          },
+        },
+      },
+      { multi: true }
+    );
+  if (response.acknowledged) {
+    // this is temporary. For specific emission use [array of contacts] of the connected user.
+    socket.broadcast.emit("update-room-status", {
+      senderId: connectedUserId,
+      status: "delivered",
+    });
+  }
 
-  // console.log(io.sockets);
-  // socket.emit("user-id", { id: socket.id });
-
-  // socket.on("disconnect", () => {
-  //   console.log("Client disconnected");
-  // });
-
-  // // this is the handler when user A sends msg to user B
-  // socket.on("msg-send", function (msg, id, callback) {
-  //   console.log("Received a chat message", msg, id);
-  // {
-  //   if (err) {
-  //     console.log("error");
-  //     return;
-  //   }
-  // console.log(ack);
-  // if (ack.ok) {
-  //   db.db()
-  //     .collection("chat")
-  //     .insertOne({ ...msg, status: "delivered" });
-  // } else {
-  //   db.db()
-  //     .collection("chat")
-  //     .insertOne({ ...msg, status: "sent" });
-  // }
-  // });
-  //callback({ ok: true });
-  //if(userB is online)
-  // socket.broadcast.to("User B").emit("msg-receive", { msg }, (ack) => {
-  //   if (err) {
-  //     console.log(err);
-  //     return;
-  //   }
-  //   if (ack.ok) {
-  //     db.db()
-  //       .collection("chat")
-  //       .insertOne({ ...msg, status: "delivered" });
-  //     callback({ ok: true });
-  //   } else {
-  //     db.db()
-  //       .collection("chat")
-  //       .insertOne({ ...msg, status: "sent" });
-  //     callback({ ok: true });
-  //   }
-  // });
-
-  //if userB is offline
-  // create a new msg record in User A & User B with SENT status
-  //callback({ ok: true });
-  // if some error
-  // create a new msg record in User A & User B with FAILED status
-  //});
   socket.on("disconnect", () => {
     removeUserFromSocketMap(socket.handshake.auth.userId);
   });
