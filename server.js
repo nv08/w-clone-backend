@@ -310,7 +310,6 @@ http.listen(process.env.PORT || 80, () => {
 io.on("connection", async (socket) => {
   const connectedUserId = socket.handshake.auth.userId;
   if (connectedUserId) {
-    console.log(connectedUserId);
     upsertUserToSocketMap(connectedUserId, socket);
     const response = await db
       .db()
@@ -320,7 +319,6 @@ io.on("connection", async (socket) => {
         { $set: { status: "delivered" } },
         { multi: true }
       );
-        console.log(response);
     // if no row updated then no need to send
     if (response.acknowledged && response.modifiedCount) {
       // this is temporary. For specific emission use [array of contacts] of the connected user.
