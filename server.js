@@ -24,14 +24,14 @@ const io = new Server(http, {
   },
 });
 
-// io.use((socket, next) => {
-//   const userId = socket.handshake.auth.userId;
-//   if (!userId) {
-//     return next(new Error("invalid"));
-//   }
-//   socket.userId = userId;
-//   next();
-// });
+io.use((socket, next) => {
+  const userId = socket.handshake.auth.userId;
+  if (!userId) {
+    return next(new Error("invalid"));
+  }
+  socket.userId = userId;
+  next();
+});
 
 app.get("/", function (req, res) {
   res.send("hi");
@@ -101,23 +101,34 @@ app.post("/sendMessage", validateId, async (req, res) => {
 
     const socket = getSocketId(receiverId);
 
-    socket &&
-      socket.emit("msg-receive", msgObj, (confirmation) => {
-        console.log(confirmation, "confirm");
+    if (socket) {
+      socket.emit("msg-receive", msgObj, async (confirmation) => {
         if (confirmation.status) {
           status = confirmation.status;
         }
+        const response = await db
+          .db()
+          .collection("chat")
+          .insertOne({ ...msgObj, status });
+
+        if (response.acknowledged) {
+          res.send({ status: "success", data: { ...msgObj, status } });
+        } else {
+          res
+            .status(422)
+            .send({ status: "failed", msg: "Entry not processed" });
+        }
       });
-
-    const response = await db
-      .db()
-      .collection("chat")
-      .insertOne({ ...msgObj, status });
-
-    if (response.acknowledged) {
-      res.send({ status: "success", data: { ...msgObj, status } });
     } else {
-      res.status(422).send({ status: "failed", msg: "Entry not processed" });
+      const response = await db
+        .db()
+        .collection("chat")
+        .insertOne({ ...msgObj, status });
+      if (response.acknowledged) {
+        res.send({ status: "success", data: { ...msgObj, status } });
+      } else {
+        res.status(422).send({ status: "failed", msg: "Entry not processed" });
+      }
     }
   } catch (err) {
     console.log(err);
@@ -252,7 +263,12 @@ app.post("/getRoomById", validateId, async (req, res) => {
         });
       // send read event to receiver
       const socket = getSocketId(receiverId);
-      socket && socket.emit("update-room-status", { senderId, status: "read" });
+
+      socket &&
+        socket.emit("update-room-status", {
+          receiverId: senderId,
+          status: "read",
+        });
     } else {
       res.status(422).send({ status: "failed", msg: "some error occured" });
     }
@@ -293,31 +309,26 @@ http.listen(process.env.PORT || 80, () => {
 
 io.on("connection", async (socket) => {
   const connectedUserId = socket.handshake.auth.userId;
-  upsertUserToSocketMap(connectedUserId, socket);
-  const response = await db
-    .db()
-    .collection("chat")
-    .updateMany(
-      { receiverId: connectedUserId },
-      {
-        $set: {
-          status: {
-            $cond: {
-              if: { $eq: ["$status", "sent"] },
-              then: "delivered",
-              else: "$status",
-            },
-          },
-        },
-      },
-      { multi: true }
-    );
-  if (response.acknowledged) {
-    // this is temporary. For specific emission use [array of contacts] of the connected user.
-    socket.broadcast.emit("update-room-status", {
-      senderId: connectedUserId,
-      status: "delivered",
-    });
+  if (connectedUserId) {
+    console.log(connectedUserId);
+    upsertUserToSocketMap(connectedUserId, socket);
+    const response = await db
+      .db()
+      .collection("chat")
+      .updateMany(
+        { receiverId: connectedUserId, status: "sent" },
+        { $set: { status: "delivered" } },
+        { multi: true }
+      );
+        console.log(response);
+    // if no row updated then no need to send
+    if (response.acknowledged && response.modifiedCount) {
+      // this is temporary. For specific emission use [array of contacts] of the connected user.
+      socket.broadcast.emit("update-room-status", {
+        receiverId: connectedUserId,
+        status: "delivered",
+      });
+    }
   }
 
   socket.on("disconnect", () => {
