@@ -174,7 +174,9 @@ app.post("/getLastConversations", async (req, res) => {
         },
       },
       sort: { createdAt: -1 },
-      replaceRoot: { newRoot: "$document" },
+      replaceRoot: {
+        newRoot: { $mergeObjects: [{ unread: "$unread" }, "$document"] },
+      },
       lookup: {
         from: "users",
         let: { receiverId: "$other" },
@@ -188,6 +190,9 @@ app.post("/getLastConversations", async (req, res) => {
       unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true },
       group: {
         _id: { me: "$me", other: "$other" },
+        unread: {
+          $sum: { $cond: [{ $ne: ["$status", "read"] }, 1, 0] },
+        },
         document: { $last: "$$ROOT" },
       },
       project: {
@@ -199,6 +204,7 @@ app.post("/getLastConversations", async (req, res) => {
         createdAt: 1,
         status: 1,
         userDetails: 1,
+        unread: 1,
       },
     };
     await db
