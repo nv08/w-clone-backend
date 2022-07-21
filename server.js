@@ -191,7 +191,18 @@ app.post("/getLastConversations", async (req, res) => {
       group: {
         _id: { me: "$me", other: "$other" },
         unread: {
-          $sum: { $cond: [{ $ne: ["$status", "read"] }, 1, 0] },
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $ne: ["$status", "read"] },
+                  { $eq: ["$senderId", "$other"] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
         },
         document: { $last: "$$ROOT" },
       },
@@ -205,6 +216,7 @@ app.post("/getLastConversations", async (req, res) => {
         status: 1,
         userDetails: 1,
         unread: 1,
+        //remove password from userdetails
       },
     };
     await db
@@ -264,6 +276,12 @@ app.post("/getRoomById", validateId, async (req, res) => {
         .toArray((err, result) => {
           if (!err) {
             res.send({ status: "success", data: result });
+            const socket = getSocketId(receiverId);
+            socket &&
+              socket.emit("update-room-status", {
+                receiverId: senderId,
+                status: "read",
+              });
             return;
           }
         });
@@ -303,13 +321,12 @@ io.on("connection", async (socket) => {
     }
   }
 
-  socket.on("open-room", ({ senderId, receiverId }) => {
-    const socket = getSocketId(receiverId);
-    socket &&
-      socket.emit("update-room-status", {
-        receiverId: senderId,
-        status: "read",
-      });
+  socket.on("send-typing", ({ senderId, receiverId }) => {
+    socket.emit("typing-status", { senderId, receiverId, typing: true });
+  });
+
+  socket.on("stop-typing", ({ senderId, receiverId }) => {
+    socket.emit("typing-status", { senderId, receiverId, typing: false });
   });
 
   socket.on("disconnect", () => {
