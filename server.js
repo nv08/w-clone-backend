@@ -261,41 +261,9 @@ app.post("/getRoomById", validateId, async (req, res) => {
             return;
           }
         });
-      // send read event to receiver
-      const socket = getSocketId(receiverId);
-
-      socket &&
-        socket.emit("update-room-status", {
-          receiverId: senderId,
-          status: "read",
-        });
     } else {
       res.status(422).send({ status: "failed", msg: "some error occured" });
-    }
-  } catch (err) {
-    console.log(err);
-    res.status(500).send({ status: "failed", msg: "internal server error" });
-  }
-});
-
-app.post("/roomOpen", async (req, res) => {
-  try {
-    const { senderId, receiverId } = req.body;
-
-    if (!senderId || !receiverId) {
-      res.status(400).send({ status: "failed", msg: "missing fields" });
       return;
-    }
-
-    const response = await db
-      .db()
-      .collection("chat")
-      .update({ senderId, receiverId }, { $set: { status: "read" } });
-
-    if (response.acknowledged) {
-      res.send({ status: "success", data: [] });
-    } else {
-      res.status(422).send({ status: "failed", msg: "some error" });
     }
   } catch (err) {
     console.log(err);
@@ -328,6 +296,15 @@ io.on("connection", async (socket) => {
       });
     }
   }
+
+  socket.on("open-room", ({ senderId, receiverId }) => {
+    const socket = getSocketId(receiverId);
+    socket &&
+      socket.emit("update-room-status", {
+        receiverId: senderId,
+        status: "read",
+      });
+  });
 
   socket.on("disconnect", () => {
     removeUserFromSocketMap(socket.handshake.auth.userId);
