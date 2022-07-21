@@ -323,11 +323,21 @@ io.on("connection", async (socket) => {
   }
 
   socket.on("send-typing", ({ senderId, receiverId }) => {
-    socket.emit("typing-status", { senderId, receiverId, typing: true });
+    const receiverSocket = getSocketId(receiverId);
+    receiverSocket && receiverSocket.emit("typing-status", {
+      senderId,
+      receiverId,
+      typing: true,
+    });
   });
 
   socket.on("stop-typing", ({ senderId, receiverId }) => {
-    socket.emit("typing-status", { senderId, receiverId, typing: false });
+    const receiverSocket = getSocketId(receiverId);
+    receiverSocket && receiverSocket.emit("typing-status", {
+      senderId,
+      receiverId,
+      typing: false,
+    });
   });
 
   socket.on("disconnect", () => {
