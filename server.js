@@ -92,6 +92,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
+//
 app.post("/sendMessage", validateId, async (req, res) => {
   try {
     const { senderId, receiverId, message, msgId } = req.body;
