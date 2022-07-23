@@ -7,7 +7,7 @@ if (process.env.NODE_ENV !== "prod") {
 
 const MONGO_URL = process.env.DB_URL;
 
-var db;
+var db = {};
 MongoClient.connect(MONGO_URL, (err, dbClient) => {
   if (err) {
     console.log("error occured", err);

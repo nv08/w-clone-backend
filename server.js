@@ -7,6 +7,7 @@ import { db } from "./connection.js";
 import { validateId } from "./middlewares/validateId.js";
 import cors from "cors";
 import {
+  getSocketFromId,
   getSocketId,
   removeUserFromSocketMap,
   upsertUserToSocketMap,
@@ -100,8 +101,9 @@ app.post("/sendMessage", validateId, async (req, res) => {
     let status = "sent";
     const msgObj = { senderId, receiverId, msgId, message, createdAt };
 
-    const socket = getSocketId(receiverId);
+    const socket = getSocketFromId(receiverId);
 
+    // send socket message after db confirmation
     if (socket) {
       socket.emit("msg-receive", msgObj, async (confirmation) => {
         if (confirmation.status) {
@@ -252,7 +254,13 @@ app.post("/getLastConversations", async (req, res) => {
 app.post("/getRoomById", validateId, async (req, res) => {
   try {
     const { senderId, receiverId } = req.body;
-
+    const receiverSocket = getSocketFromId(receiverId);
+    const senderSocket = getSocketId(senderId);
+    if (senderSocket && receiverSocket) {
+      receiverSocket
+        .to(senderSocket)
+        .emit("user-online", { receiverId, online: true });
+    }
     // update all the fields to "read" status when certain room is opened
     const updateFields = await db
       .db()
@@ -277,7 +285,7 @@ app.post("/getRoomById", validateId, async (req, res) => {
         .toArray((err, result) => {
           if (!err) {
             res.send({ status: "success", data: result });
-            const socket = getSocketId(receiverId);
+            const socket = getSocketFromId(receiverId);
             socket &&
               socket.emit("update-room-status", {
                 receiverId: senderId,
@@ -302,6 +310,10 @@ http.listen(process.env.PORT || 80, () => {
 
 io.on("connection", async (socket) => {
   const connectedUserId = socket.handshake.auth.userId;
+  socket.broadcast.emit("user-online", {
+    receiverId: connectedUserId,
+    online: true,
+  });
   if (connectedUserId) {
     upsertUserToSocketMap(connectedUserId, socket);
     const response = await db
@@ -323,24 +335,28 @@ io.on("connection", async (socket) => {
   }
 
   socket.on("send-typing", ({ senderId, receiverId }) => {
-    const receiverSocket = getSocketId(receiverId);
-    receiverSocket && receiverSocket.emit("typing-status", {
-      senderId,
-      receiverId,
-      typing: true,
-    });
+    const receiverSocket = getSocketFromId(receiverId);
+    receiverSocket &&
+      receiverSocket.emit("typing-status", {
+        senderId,
+        receiverId,
+        typing: true,
+      });
   });
 
   socket.on("stop-typing", ({ senderId, receiverId }) => {
-    const receiverSocket = getSocketId(receiverId);
-    receiverSocket && receiverSocket.emit("typing-status", {
-      senderId,
-      receiverId,
-      typing: false,
-    });
+    const receiverSocket = getSocketFromId(receiverId);
+    receiverSocket &&
+      receiverSocket.emit("typing-status", {
+        senderId,
+        receiverId,
+        typing: false,
+      });
   });
 
   socket.on("disconnect", () => {
-    removeUserFromSocketMap(socket.handshake.auth.userId);
+    const id = socket.handshake.auth.userId;
+    socket.broadcast.emit("user-online", { receiverId: id, online: false });
+    removeUserFromSocketMap(id);
   });
 });

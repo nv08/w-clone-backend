@@ -13,7 +13,12 @@ export const removeUserFromSocketMap = (socketId) => {
   // }
 };
 
+export const getSocketFromId = (userId) => {
+  const socket = socketMap.get(userId);
+  return socket;
+};
+
 export const getSocketId = (userId) => {
-  const id = socketMap.get(userId);
+  const { id } = socketMap.get(userId);
   return id;
 };
