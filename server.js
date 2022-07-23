@@ -188,6 +188,7 @@ app.post("/getLastConversations", async (req, res) => {
           {
             $match: { $expr: { $and: [{ $eq: ["$userId", "$$receiverId"] }] } },
           },
+          { $project: { password: 0 } },
         ],
       },
       unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true },
