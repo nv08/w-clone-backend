@@ -167,7 +167,7 @@ app.post("/getLastConversations", async (req, res) => {
     }
 
     const q = {
-      match: { $or: [{ receiverId: userId }, { senderId: userId }] },
+      match: { senderId: userId },
       addFields: {
         me: {
           $cond: [{ $ne: ["$senderId", userId] }, "$receiverId", "$senderId"],
