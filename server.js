@@ -167,7 +167,7 @@ app.post("/getLastConversations", async (req, res) => {
     }
 
     const q = {
-      match: { senderId: userId },
+      match: { $or: [{ receiverId: userId }, { senderId: userId }] },
       addFields: {
         me: {
           $cond: [{ $ne: ["$senderId", userId] }, "$receiverId", "$senderId"],
@@ -176,7 +176,8 @@ app.post("/getLastConversations", async (req, res) => {
           $cond: [{ $ne: ["$senderId", userId] }, "$senderId", "$receiverId"],
         },
       },
-      sort: { createdAt: -1 },
+      sort1: { createdAt: 1 },
+      sort2: { createdAt: -1 },
       replaceRoot: {
         newRoot: { $mergeObjects: [{ unread: "$unread" }, "$document"] },
       },
@@ -193,14 +194,14 @@ app.post("/getLastConversations", async (req, res) => {
       },
       unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true },
       group: {
-        _id: { me: "$me", other: "$other" },
+        _id: { senderId: "$me", receiverId: "$other" },
         unread: {
           $sum: {
             $cond: [
               {
                 $and: [
                   { $ne: ["$status", "read"] },
-                  { $eq: ["$senderId", "$other"] },
+                  { $ne: ["$senderId", userId] },
                 ],
               },
               1,
@@ -228,12 +229,13 @@ app.post("/getLastConversations", async (req, res) => {
       .collection("chat")
       .aggregate([
         { $match: q.match },
+        { $sort: q.sort1 },
         { $addFields: q.addFields },
         { $group: q.group },
         { $replaceRoot: q.replaceRoot },
         { $lookup: q.lookup },
         { $unwind: q.unwind },
-        { $sort: q.sort },
+        { $sort: q.sort2 },
         { $project: q.project },
       ])
       .toArray((err, result) => {
