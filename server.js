@@ -260,7 +260,7 @@ app.post("/getLastConversations", async (req, res) => {
 
 app.post("/getRoomById", validateId, async (req, res) => {
   try {
-    const { senderId, receiverId } = req.body;
+    const { senderId, receiverId, page } = req.body;
     const receiverSocket = getSocketFromId(receiverId);
     const senderSocket = getSocketId(senderId);
     if (senderSocket && receiverSocket) {
@@ -282,13 +282,20 @@ app.post("/getRoomById", validateId, async (req, res) => {
       await db
         .db()
         .collection("chat")
-        .find({
-          $or: [
-            { $and: [{ senderId: senderId }, { receiverId: receiverId }] },
-            { $and: [{ senderId: receiverId }, { receiverId: senderId }] },
-          ],
-        })
-        .sort({ createdAt: -1 })
+        .aggregate([
+          {
+            $match: {
+              $or: [
+                { $and: [{ senderId: senderId }, { receiverId: receiverId }] },
+                { $and: [{ senderId: receiverId }, { receiverId: senderId }] },
+              ],
+            },
+          },
+          { $sort: { createdAt: -1 } },
+          { $skip: page*30 || 0 },
+          { $limit: 30 },
+        ])
+
         .toArray((err, result) => {
           if (!err) {
             res.send({ status: "success", data: result });

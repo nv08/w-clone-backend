@@ -6,11 +6,6 @@ export const upsertUserToSocketMap = (userId, socketId) => {
 
 export const removeUserFromSocketMap = (socketId) => {
   socketMap.delete(socketId);
-  // for (let [key, value] of socketMap.entries()) {
-  //   if (value === socketId) {
-  //     socketMap.delete(key);
-  //   }
-  // }
 };
 
 export const getSocketFromId = (userId) => {
@@ -19,6 +14,9 @@ export const getSocketFromId = (userId) => {
 };
 
 export const getSocketId = (userId) => {
-  const { id } = socketMap.get(userId);
-  return id;
+  const data = socketMap.get(userId);
+  if (data && data.id) {
+    return data.id;
+  }
+  return "";
 };
