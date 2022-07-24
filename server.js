@@ -96,7 +96,7 @@ app.post("/login", async (req, res) => {
 //
 app.post("/sendMessage", validateId, async (req, res) => {
   try {
-    const { senderId, receiverId, message, msgId } = req.body;
+    const { senderId, receiverId, message, msgId, userDetails } = req.body;
     const createdAt = Date.now();
     let status = "sent";
     const msgObj = { senderId, receiverId, msgId, message, createdAt };
@@ -105,23 +105,27 @@ app.post("/sendMessage", validateId, async (req, res) => {
 
     // send socket message after db confirmation
     if (socket) {
-      socket.emit("msg-receive", msgObj, async (confirmation) => {
-        if (confirmation.status) {
-          status = confirmation.status;
-        }
-        const response = await db
-          .db()
-          .collection("chat")
-          .insertOne({ ...msgObj, status });
+      socket.emit(
+        "msg-receive",
+        { msgObj, userDetails },
+        async (confirmation) => {
+          if (confirmation.status) {
+            status = confirmation.status;
+          }
+          const response = await db
+            .db()
+            .collection("chat")
+            .insertOne({ ...msgObj, status });
 
-        if (response.acknowledged) {
-          res.send({ status: "success", data: { ...msgObj, status } });
-        } else {
-          res
-            .status(422)
-            .send({ status: "failed", msg: "Entry not processed" });
+          if (response.acknowledged) {
+            res.send({ status: "success", data: { ...msgObj, status } });
+          } else {
+            res
+              .status(422)
+              .send({ status: "failed", msg: "Entry not processed" });
+          }
         }
-      });
+      );
     } else {
       const response = await db
         .db()

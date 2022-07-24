@@ -7,12 +7,15 @@ const validateId = async (req, res, next) => {
       res.status(400).send({ status: "failed", msg: "missing ids" });
       return;
     }
+    if (senderId === receiverId) {
+      res.status(403).send({ status: "failed", msg: "self msg not allowed" });
+      return;
+    }
     // const validIDs = await db
     //   .db()
     //   .collection("users")
     //   .find({ userId: { $in: [senderId, receiverId] } })
     //   .count();
-
 
     // if (validIDs !== 2) {
     //   res.status(403).send({ status: "failed", msg: "invalid users" });
