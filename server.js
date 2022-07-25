@@ -109,7 +109,7 @@ app.post("/sendMessage", validateId, async (req, res) => {
         "msg-receive",
         { msgObj, userDetails },
         async (confirmation) => {
-          if (confirmation.status) {
+          if (confirmation && confirmation.status) {
             status = confirmation.status;
           }
           const response = await db
@@ -261,57 +261,30 @@ app.post("/getLastConversations", async (req, res) => {
 app.post("/getRoomById", validateId, async (req, res) => {
   try {
     const { senderId, receiverId, page } = req.body;
-    const receiverSocket = getSocketFromId(receiverId);
-    const senderSocket = getSocketId(senderId);
-    if (senderSocket && receiverSocket) {
-      receiverSocket
-        .to(senderSocket)
-        .emit("user-online", { receiverId, online: true });
-    }
     // update all the fields to "read" status when certain room is opened
-    const updateFields = await db
+
+    await db
       .db()
       .collection("chat")
-      .updateMany(
-        { senderId: receiverId, receiverId: senderId },
-        { $set: { status: "read" } },
-        { multi: true }
-      );
-
-    if (updateFields.acknowledged) {
-      await db
-        .db()
-        .collection("chat")
-        .aggregate([
-          {
-            $match: {
-              $or: [
-                { $and: [{ senderId: senderId }, { receiverId: receiverId }] },
-                { $and: [{ senderId: receiverId }, { receiverId: senderId }] },
-              ],
-            },
+      .aggregate([
+        {
+          $match: {
+            $or: [
+              { $and: [{ senderId: senderId }, { receiverId: receiverId }] },
+              { $and: [{ senderId: receiverId }, { receiverId: senderId }] },
+            ],
           },
-          { $sort: { createdAt: -1 } },
-          { $skip: page*30 || 0 },
-          { $limit: 30 },
-        ])
+        },
+        { $sort: { createdAt: -1 } },
+        { $skip: page * 30 || 0 },
+        { $limit: 30 },
+      ])
 
-        .toArray((err, result) => {
-          if (!err) {
-            res.send({ status: "success", data: result });
-            const socket = getSocketFromId(receiverId);
-            socket &&
-              socket.emit("update-room-status", {
-                receiverId: senderId,
-                status: "read",
-              });
-            return;
-          }
-        });
-    } else {
-      res.status(422).send({ status: "failed", msg: "some error occured" });
-      return;
-    }
+      .toArray((err, result) => {
+        if (!err) {
+          res.send({ status: "success", data: result });
+        }
+      });
   } catch (err) {
     console.log(err);
     res.status(500).send({ status: "failed", msg: "internal server error" });
@@ -347,6 +320,31 @@ io.on("connection", async (socket) => {
       });
     }
   }
+
+  socket.on("user-room-open", async ({ senderId, receiverId }) => {
+    const receiverSocket = getSocketFromId(receiverId);
+    const senderSockcet = getSocketFromId(senderId);
+    const senderSocketId = getSocketId(senderId);
+    const receiverSocketId = getSocketId(receiverId);
+    if (senderSocketId && receiverSocket) {
+      receiverSocket
+        .to(senderSocketId)
+        .emit("user-online", { receiverId, online: true });
+
+      senderSockcet.to(receiverSocketId).emit("update-room-status", {
+        receiverId: senderId,
+        status: "read",
+      });
+    }
+    await db
+      .db()
+      .collection("chat")
+      .updateMany(
+        { senderId: receiverId, receiverId: senderId },
+        { $set: { status: "read" } },
+        { multi: true }
+      );
+  });
 
   socket.on("send-typing", ({ senderId, receiverId }) => {
     const receiverSocket = getSocketFromId(receiverId);
